@@ -1,0 +1,12 @@
+bertopic
+sentence-transformers
+umap-learn
+hdbscan
+scikit-learn
+pandas
+numpy
+openpyxl
+pyvi
+huggingface-hub
+tqdm
+llama-cpp-python
