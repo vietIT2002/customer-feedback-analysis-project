@@ -9,7 +9,9 @@ config.yaml; the API key (if any) is read from the environment, never the UI.
 """
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 import altair as alt
 import pandas as pd
@@ -25,7 +27,26 @@ st.set_page_config(
 )
 
 CONFIG_PATH = "config.yaml"
+RESULT_PATH = Path("output/last_result.json")  # survives page reloads
 INK, VIOLET = "#1B1726", "#5B2EFF"
+
+
+def save_result(out: dict) -> None:
+    """Persist the latest analysis so a full page reload doesn't lose it."""
+    try:
+        RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        RESULT_PATH.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass  # persistence is best-effort; never break the run
+
+
+def load_result() -> dict | None:
+    if RESULT_PATH.exists():
+        try:
+            return json.loads(RESULT_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
 
 # ----------------------------------------------------------------- i18n ------
 I18N = {
@@ -290,11 +311,15 @@ if run and uploaded is not None and text_column:
         with st.spinner(t("spinner")):
             uploaded.seek(0)
             df = read_uploaded(uploaded)
-            st.session_state["out"] = analyze(df, text_column, cfg, do_summarize, t)
+            result = analyze(df, text_column, cfg, do_summarize, t)
+            st.session_state["out"] = result
+            save_result(result)
     except Exception as e:
         st.error(t("err_analyze").format(e=e))
 
-out = st.session_state.get("out")
+# Resolve current result: in-session first, else the last one saved to disk
+# (so a full page reload / new session still shows the latest analysis).
+out = st.session_state.get("out") or load_result()
 if not out:
     st.info(t("empty"), icon=":material/upload_file:")
     st.stop()

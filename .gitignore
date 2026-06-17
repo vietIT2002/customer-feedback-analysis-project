@@ -9,6 +9,7 @@ output/embeddings.npy
 output/llm_cache/
 output/bertopic_model/
 output/topic_representations.csv
+output/last_result.json
 output/*.log
 output/*.err
 
