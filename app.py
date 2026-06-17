@@ -81,6 +81,8 @@ I18N = {
         "c_count": "Số feedback",
         "c_keywords": "Từ khoá",
         "c_summary": "Tóm tắt",
+        "c_sentiment": "Cảm xúc",
+        "c_priority": "Ưu tiên",
         "btn_download": "Tải kết quả (CSV)",
         "exp": "Chủ đề {id} · {n} phản hồi · {kw}",
         "rep": "Phản hồi tiêu biểu",
@@ -116,10 +118,24 @@ I18N = {
         "c_count": "Feedback count",
         "c_keywords": "Keywords",
         "c_summary": "Summary",
+        "c_sentiment": "Sentiment",
+        "c_priority": "Priority",
         "btn_download": "Download results (CSV)",
         "exp": "Topic {id} · {n} feedback · {kw}",
         "rep": "Representative feedback",
     },
+}
+
+# canonical sentiment/priority -> (vi label, en label, color)
+SENT = {
+    "Tích cực": ("Tích cực", "Positive", "#16A34A"),
+    "Tiêu cực": ("Tiêu cực", "Negative", "#E11D48"),
+    "Trung lập": ("Trung lập", "Neutral", "#6B6577"),
+}
+PRIO = {
+    "Cao": ("Cao", "High", "#E11D48"),
+    "Trung bình": ("Trung bình", "Medium", "#D97706"),
+    "Thấp": ("Thấp", "Low", "#16A34A"),
 }
 
 CSS = """
@@ -219,25 +235,24 @@ def analyze(df: pd.DataFrame, text_column: str, cfg: Config, do_summarize: bool,
     info = info[info.Topic != -1]
     n_noise = int(sum(1 for t_ in topics if t_ == -1))
 
-    summaries: dict[int, str] = {}
+    smap: dict[int, dict] = {}
     if do_summarize:
-        summaries = {
-            int(r["Topic"]): r["Summary"]
-            for _, r in summarize.make_summarizer(cfg.summarizer)
-            .summarize_topics(tmodel)
-            .iterrows()
-        }
+        sumdf = summarize.make_summarizer(cfg.summarizer).summarize_topics(tmodel)
+        smap = {int(r["Topic"]): r for _, r in sumdf.iterrows()}
 
     rows = []
     for _, r in info.iterrows():
         tid = int(r["Topic"])
         kws = [w for w, _ in tmodel.get_topic(tid)][: cfg.summarizer.get("max_keywords", 10)]
+        s = smap.get(tid)
         rows.append(
             {
                 "topic": tid,
                 "count": int(r["Count"]),
                 "keywords": " · ".join(kws[:6]),
-                "summary": summaries.get(tid, ""),
+                "summary": s["Summary"] if s is not None else "",
+                "sentiment": s["Sentiment"] if s is not None else "",
+                "priority": s["Priority"] if s is not None else "",
                 "docs": tmodel.get_representative_docs(tid)[:5],
             }
         )
@@ -261,6 +276,24 @@ LANG = "vi" if lang_label == "Tiếng Việt" else "en"
 
 def t(key: str) -> str:
     return I18N[LANG].get(key, key)
+
+
+def sent_disp(canon: str) -> str:
+    e = SENT.get(canon)
+    return e[0 if LANG == "vi" else 1] if e else ""
+
+
+def prio_disp(canon: str) -> str:
+    e = PRIO.get(canon)
+    return e[0 if LANG == "vi" else 1] if e else ""
+
+
+def badge(text: str, color: str) -> str:
+    return (
+        f'<span style="background:{color}1A;color:{color};border:1px solid {color}55;'
+        f'padding:2px 10px;border-radius:999px;font-size:.78rem;font-weight:600;'
+        f'font-family:Space Grotesk;">{text}</span>'
+    )
 
 
 st.markdown(
@@ -336,7 +369,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-table = pd.DataFrame(out["results"])[["topic", "count", "keywords", "summary"]]
+full = pd.DataFrame(out["results"])
+has_sentiment = bool(full.get("sentiment", pd.Series([], dtype=str)).astype(bool).any())
+table = full[["topic", "count", "keywords", "summary"]].copy()
 
 # ---- chart ----
 st.markdown(f'<div class="sec">{icon("bar_chart")} {t("sec_chart")}</div>', unsafe_allow_html=True)
@@ -358,21 +393,25 @@ st.altair_chart(chart, use_container_width=True)
 
 # ---- table ----
 st.markdown(f'<div class="sec">{icon("table_view")} {t("sec_table")}</div>', unsafe_allow_html=True)
-maxv = int(table["count"].max())
-st.dataframe(
-    table,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "topic": st.column_config.NumberColumn(t("c_topic"), width="small"),
-        "count": st.column_config.ProgressColumn(t("c_count"), format="%d", min_value=0, max_value=maxv),
-        "keywords": st.column_config.TextColumn(t("c_keywords"), width="medium"),
-        "summary": st.column_config.TextColumn(t("c_summary"), width="large"),
-    },
-)
-export = table.rename(
-    columns={"topic": t("c_topic"), "count": t("c_count"), "keywords": t("c_keywords"), "summary": t("c_summary")}
-)
+display = table.copy()
+col_cfg = {
+    "topic": st.column_config.NumberColumn(t("c_topic"), width="small"),
+    "count": st.column_config.ProgressColumn(
+        t("c_count"), format="%d", min_value=0, max_value=int(table["count"].max())
+    ),
+    "keywords": st.column_config.TextColumn(t("c_keywords"), width="medium"),
+    "summary": st.column_config.TextColumn(t("c_summary"), width="large"),
+}
+order = ["topic", "count", "keywords", "summary"]
+if has_sentiment:
+    display["priority"] = full["priority"].map(prio_disp)
+    display["sentiment"] = full["sentiment"].map(sent_disp)
+    col_cfg["priority"] = st.column_config.TextColumn(t("c_priority"), width="small")
+    col_cfg["sentiment"] = st.column_config.TextColumn(t("c_sentiment"), width="small")
+    order = ["topic", "count", "priority", "sentiment", "keywords", "summary"]
+st.dataframe(display[order], use_container_width=True, hide_index=True, column_config=col_cfg)
+
+export = display[order].rename(columns={k: t(f"c_{k}") for k in order})
 st.download_button(
     t("btn_download"),
     export.to_csv(index=False).encode("utf-8-sig"),
@@ -386,6 +425,13 @@ st.markdown(f'<div class="sec">{icon("search")} {t("sec_details")}</div>', unsaf
 for row in out["results"]:
     label = t("exp").format(id=row["topic"], n=row["count"], kw=row["keywords"])
     with st.expander(label):
+        badges = []
+        if row.get("sentiment") in SENT:
+            badges.append(badge(sent_disp(row["sentiment"]), SENT[row["sentiment"]][2]))
+        if row.get("priority") in PRIO:
+            badges.append(badge(f"{t('c_priority')}: {prio_disp(row['priority'])}", PRIO[row["priority"]][2]))
+        if badges:
+            st.markdown(" ".join(badges), unsafe_allow_html=True)
         if row["summary"]:
             st.markdown(row["summary"])
         st.markdown(f"**{t('rep')}**")

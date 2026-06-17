@@ -26,6 +26,50 @@ def _build_prompt(template: str, docs: list[str], keywords: list[str]) -> str:
     )
 
 
+# Appended to the summary prompt so one LLM call returns sentiment + summary.
+_STRUCT = (
+    "\n\nTrả lời CHÍNH XÁC theo hai dòng:\n"
+    "CẢM XÚC: tích cực | tiêu cực | trung lập\n"
+    "TÓM TẮT: <một đoạn ngắn mô tả chủ đề>"
+)
+
+
+def _parse_response(raw: str) -> tuple[str, str]:
+    """Split a structured LLM reply into (sentiment, summary).
+
+    Falls back to ('Trung lập', whole text) if the format isn't followed.
+    """
+    sentiment = "Trung lập"
+    summary_lines: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        low = line.lower()
+        if low.startswith(("cảm xúc", "cam xuc", "sentiment")):
+            val = line.split(":", 1)[1].lower() if ":" in line else ""
+            if any(k in val for k in ("tiêu cực", "tieu cuc", "negative")):
+                sentiment = "Tiêu cực"
+            elif any(k in val for k in ("tích cực", "tich cuc", "positive")):
+                sentiment = "Tích cực"
+            else:
+                sentiment = "Trung lập"
+        elif low.startswith(("tóm tắt", "tom tat", "summary")):
+            rest = line.split(":", 1)[1].strip() if ":" in line else ""
+            if rest:
+                summary_lines.append(rest)
+        else:
+            summary_lines.append(line)
+    return sentiment, (" ".join(summary_lines).strip() or raw.strip())
+
+
+def priority_label(sentiment: str, count: int, big_threshold: float) -> str:
+    """Simple auto-triage: negative + high volume = top priority."""
+    if sentiment == "Tiêu cực":
+        return "Cao" if count >= big_threshold else "Trung bình"
+    return "Thấp"
+
+
 class _CachingSummarizer(ABC):
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -56,31 +100,34 @@ class _CachingSummarizer(ABC):
     def _generate(self, prompt: str) -> str: ...
 
     def summarize_topics(self, topic_model) -> pd.DataFrame:
-        """Return a DataFrame: Topic | Keywords | Summary, for non-noise topics."""
+        """Return Topic | Keywords | Summary | Sentiment | Priority (non-noise topics)."""
         template = self.cfg["prompt_template"]
         docs_per_topic = self.cfg.get("docs_per_topic", 20)
         max_keywords = self.cfg.get("max_keywords", 10)
 
         info = topic_model.get_topic_info()
+        info = info[info.Topic != -1]
         rep_docs = topic_model.get_representative_docs()
+        counts = dict(zip(info.Topic.tolist(), info.Count.tolist()))
+        big_threshold = (sum(counts.values()) / len(counts)) if counts else 0
 
         rows = []
         for topic_id in info.Topic.tolist():
-            if topic_id == -1:
-                continue
             keywords = [w for w, _ in topic_model.get_topic(topic_id)][:max_keywords]
             docs = rep_docs.get(topic_id, [])[:docs_per_topic]
-            prompt = _build_prompt(template, docs, keywords)
+            prompt = _build_prompt(template, docs, keywords) + _STRUCT
             try:
-                summary = self._respond_cached(prompt).strip()
+                sentiment, summary = _parse_response(self._respond_cached(prompt))
             except Exception as e:  # one bad topic shouldn't kill the run
-                summary = f"[ERROR: {e}]"
-            print(f"[summarize] topic {topic_id} done")
+                sentiment, summary = "Trung lập", f"[ERROR: {e}]"
+            print(f"[summarize] topic {topic_id} done ({sentiment})")
             rows.append(
                 {
                     "Topic": topic_id,
                     "Keywords": " | ".join(keywords[:5]),
                     "Summary": summary,
+                    "Sentiment": sentiment,
+                    "Priority": priority_label(sentiment, counts[topic_id], big_threshold),
                 }
             )
         return pd.DataFrame(rows)
