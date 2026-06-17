@@ -1,12 +1,23 @@
-bertopic
-sentence-transformers
-umap-learn
-hdbscan
-scikit-learn
-pandas
-numpy
-openpyxl
-pyvi
-huggingface-hub
-tqdm
-llama-cpp-python
+# Pinned for reproducibility. The bertopic + numba + hdbscan + umap stack is
+# sensitive to numpy versions; numpy<2 is the safe anchor for this combo.
+bertopic==0.16.4
+sentence-transformers==3.3.1
+umap-learn==0.5.7
+hdbscan==0.8.40
+scikit-learn==1.5.2
+pandas==2.2.3
+numpy==1.26.4
+scipy==1.13.1
+openpyxl==3.1.5
+pyvi==0.1.1
+huggingface-hub==0.26.2
+tqdm==4.67.1
+llama-cpp-python==0.3.2
+pyyaml==6.0.2         # config loading
+
+# Used by the script but previously unlisted:
+torch==2.4.1          # device check + backs sentence-transformers
+plotly==5.24.1        # BERTopic visualize_documents()
+
+# Optional: only needed when summarizer.backend = anthropic
+# anthropic==0.39.0

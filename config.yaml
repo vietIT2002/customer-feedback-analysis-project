@@ -1,0 +1,109 @@
+# Central configuration for the customer-feedback analysis pipeline.
+# Override any field and re-run: python -m src.pipeline --config config.yaml
+
+data:
+  path: data/customer_contact.xlsx   # .xlsx or .csv
+  sheet: 0                           # sheet name or index (xlsx only)
+  text_column: noidung               # column holding the raw feedback text
+
+preprocess:
+  lowercase: true
+  min_chars: 3            # drop feedback shorter than this (after cleaning)
+  dedup: true             # drop exact-duplicate texts
+  # Extra stopwords removed AFTER word segmentation. Keep domain noise here.
+  extra_stopwords:
+    - và
+    - những
+    - "có"
+    - vậy
+    - "không"
+    - gì
+    - "nên"
+    - ko
+    - shop
+    - "cụ"
+    - "thể"
+    - "đã"
+    - hay
+    - "là"
+    - "tới"
+    - "được"
+    - "thì"
+    - "đây"
+    - "mặc"
+    - "buôn"
+    - "nhưng"
+    - "rồi"
+    - k
+    - "quá"
+    - "trời"
+    - "ạ"
+    - "thôi"
+    - "như"
+    - z
+    - "đc"
+    - r
+    - sao
+    - "hơi"
+    - v
+    - mik
+    - "sốp"
+    - "á"
+    - hi
+    - "chúc"
+
+embedding:
+  model_name: VoVanPhuc/sup-SimCSE-VietNamese-phobert-base
+  device: auto            # auto | cuda | cpu
+  batch_size: 32
+  cache_path: output/embeddings.npy   # set to null to disable caching
+
+umap:
+  n_components: 5
+  n_neighbors: 4
+  min_dist: 0.0
+  metric: cosine
+  random_state: 42
+
+hdbscan:
+  min_cluster_size: 5
+  min_samples: 3
+  metric: euclidean
+  cluster_selection_method: leaf   # leaf | eom
+
+bertopic:
+  language: multilingual
+  mmr_diversity: 0.1      # MaximalMarginalRelevance diversity
+  use_keybert: true       # refine topic words with KeyBERTInspired
+
+summarizer:
+  enabled: true
+  backend: llama_cpp      # llama_cpp | anthropic
+  docs_per_topic: 20      # representative docs fed to the LLM per topic
+  max_keywords: 10
+  max_tokens: 80
+  temperature: 0.7
+  top_p: 0.8
+  cache_dir: output/llm_cache   # responses cached by prompt hash
+  prompt_template: |
+    Tôi có một chủ đề bao gồm các tài liệu sau:
+    [DOCUMENTS]
+    Chủ đề này được mô tả bởi các từ khóa sau: '[KEYWORDS]'.
+    Dựa trên các tài liệu và từ khóa, hãy mô tả ngắn gọn chủ đề này nói về điều gì?
+
+  # backend: llama_cpp
+  llama_cpp:
+    model_path: ./vinallama-7b-chat_q5_0.gguf
+    n_ctx: 4096
+    n_gpu_layers: 0       # 0 = CPU only; raise (e.g. 35) when a GPU is present
+    n_batch: 128
+    n_threads: 4
+
+  # backend: anthropic  (requires ANTHROPIC_API_KEY env var + `pip install anthropic`)
+  anthropic:
+    model: claude-haiku-4-5
+
+output:
+  dir: output
+  topics_csv: topic_representations.csv
+  model_dir: output/bertopic_model   # saved BERTopic model

@@ -80,8 +80,14 @@ pip install pyvi
 # )
 from pyvi.ViTokenizer import tokenize
 
-# Assuming 'df' is already defined
-df["Product_clean"] = df["noidung"].fillna("").astype(str)
+# Assuming 'df' is already defined.
+# IMPORTANT: PhoBERT / SimCSE-PhoBERT require WORD-SEGMENTED input
+# (e.g. "chất lượng" -> "chất_lượng"). Without tokenize() the embeddings
+# are computed on raw whitespace-split text, which noticeably degrades
+# clustering and topic quality. This was the missing step.
+df["Product_clean"] = (
+    df["noidung"].fillna("").astype(str).apply(tokenize)
+)
 abstracts = df["Product_clean"].tolist()
 
 # Encode
@@ -93,7 +99,7 @@ embeddings = embedding_model.encode(
 print(f"Embeddings shape: {embeddings.shape}")
 
 from umap import UMAP
-# We reduce the input embeddings from 384 dimensions to 5 dimensions
+# We reduce the input embeddings (768 dims for phobert-base) to 5 dimensions
 umap_model = UMAP(n_components=5, min_dist=0.0, n_neighbors=4, metric='cosine', random_state=42)
 
 reduced_embeddings = umap_model.fit_transform(embeddings)
