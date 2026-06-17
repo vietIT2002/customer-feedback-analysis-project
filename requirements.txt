@@ -14,6 +14,7 @@ huggingface-hub==0.26.2
 tqdm==4.67.1
 llama-cpp-python==0.3.2
 pyyaml==6.0.2         # config loading
+streamlit==1.39.0     # web dashboard (app.py)
 
 # Used by the script but previously unlisted:
 torch==2.4.1          # device check + backs sentence-transformers
@@ -21,3 +22,4 @@ plotly==5.24.1        # BERTopic visualize_documents()
 
 # Optional: only needed when summarizer.backend = anthropic
 # anthropic==0.39.0
+# (backend = openai_compatible needs NO extra package — uses stdlib urllib)

@@ -110,6 +110,22 @@ python -m src.pipeline --config config.yaml --no-summarize
 - `backend: llama_cpp` (offline) — download a GGUF model and point `model_path` to it.
   Keep `n_gpu_layers: 0` on CPU; raise it when a GPU is available.
 - `backend: anthropic` — `pip install anthropic`, set `ANTHROPIC_API_KEY`; no GPU needed.
+- `backend: openai_compatible` — OpenRouter / Mistral / Groq (free tiers). No extra
+  package; just set the API key env var named in `config.yaml`. **Fastest path** —
+  summarizes all topics via API in seconds, no GPU.
+
+### 🖥️ Web dashboard (for non-technical users)
+
+A Streamlit app lets store staff upload a feedback file and read the topics &
+summaries — no command line needed:
+
+```bash
+streamlit run app.py
+```
+
+Upload an `.xlsx`/`.csv`, pick the text column, click **Phân tích**, and view the
+topic table, a bar chart of topic sizes, AI summaries, and representative feedback
+per topic (with CSV export). The API key is read from the environment, never the UI.
 
 ## 📊 Output
 

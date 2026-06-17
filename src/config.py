@@ -62,9 +62,10 @@ class Config:
         if not self.data.get("text_column"):
             raise ValueError("data.text_column must be set")
         backend = self.summarizer.get("backend")
-        if self.summarizer.get("enabled") and backend not in {"llama_cpp", "anthropic"}:
+        valid = {"llama_cpp", "anthropic", "openai_compatible"}
+        if self.summarizer.get("enabled") and backend not in valid:
             raise ValueError(
-                f"summarizer.backend must be 'llama_cpp' or 'anthropic', got {backend!r}"
+                f"summarizer.backend must be one of {sorted(valid)}, got {backend!r}"
             )
 
     @property

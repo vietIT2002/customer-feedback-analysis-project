@@ -8,6 +8,9 @@ venv/
 output/embeddings.npy
 output/llm_cache/
 output/bertopic_model/
+output/topic_representations.csv
+output/*.log
+output/*.err
 
 # Local LLM weights (download separately, see README)
 *.gguf

@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import urllib.error
+import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -127,10 +130,60 @@ class AnthropicSummarizer(_CachingSummarizer):
         return "".join(block.text for block in msg.content if block.type == "text")
 
 
+class OpenAICompatibleSummarizer(_CachingSummarizer):
+    """Any OpenAI-compatible chat API: OpenRouter, Mistral, Groq, etc.
+
+    Uses stdlib urllib (no extra dependency). Configure base_url, model and the
+    name of the env var holding the API key in config.
+    """
+
+    def __init__(self, cfg: dict):
+        super().__init__(cfg)
+        oc = cfg["openai_compatible"]
+        self.base_url = oc["base_url"].rstrip("/")
+        self.model = oc["model"]
+        key_env = oc.get("api_key_env", "OPENROUTER_API_KEY")
+        self.api_key = os.getenv(key_env)
+        if not self.api_key:
+            raise RuntimeError(
+                f"Environment variable {key_env!r} is not set. "
+                f"Set it to your API key before running."
+            )
+
+    def _generate(self, prompt: str) -> str:
+        body = json.dumps(
+            {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": self.cfg.get("max_tokens", 80),
+                "temperature": self.cfg.get("temperature", 0.7),
+                "top_p": self.cfg.get("top_p", 0.8),
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "ignore")[:200]
+            raise RuntimeError(f"API HTTP {e.code}: {detail}") from e
+        return data["choices"][0]["message"]["content"]
+
+
 def make_summarizer(cfg: dict) -> _CachingSummarizer:
     backend = cfg["backend"]
     if backend == "llama_cpp":
         return LlamaCppSummarizer(cfg)
     if backend == "anthropic":
         return AnthropicSummarizer(cfg)
+    if backend == "openai_compatible":
+        return OpenAICompatibleSummarizer(cfg)
     raise ValueError(f"Unknown summarizer backend: {backend!r}")

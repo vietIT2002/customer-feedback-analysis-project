@@ -78,10 +78,10 @@ bertopic:
 
 summarizer:
   enabled: true
-  backend: llama_cpp      # llama_cpp | anthropic
-  docs_per_topic: 20      # representative docs fed to the LLM per topic
+  backend: openai_compatible   # llama_cpp | anthropic | openai_compatible
+  docs_per_topic: 5       # representative docs fed to the LLM per topic (lower = faster on CPU)
   max_keywords: 10
-  max_tokens: 80
+  max_tokens: 256
   temperature: 0.7
   top_p: 0.8
   cache_dir: output/llm_cache   # responses cached by prompt hash
@@ -97,11 +97,23 @@ summarizer:
     n_ctx: 4096
     n_gpu_layers: 0       # 0 = CPU only; raise (e.g. 35) when a GPU is present
     n_batch: 128
-    n_threads: 4
+    n_threads: 6
 
   # backend: anthropic  (requires ANTHROPIC_API_KEY env var + `pip install anthropic`)
   anthropic:
     model: claude-haiku-4-5
+
+  # backend: openai_compatible  (OpenRouter / Mistral / Groq — no extra pip install)
+  # Set the API key in the env var named by api_key_env, then run.
+  openai_compatible:
+    # --- Mistral (free tier) ---
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    api_key_env: MISTRAL_API_KEY
+    # --- OpenRouter (free models) — swap the three lines above for these ---
+    # base_url: https://openrouter.ai/api/v1
+    # model: meta-llama/llama-3.3-70b-instruct:free
+    # api_key_env: OPENROUTER_API_KEY
 
 output:
   dir: output
