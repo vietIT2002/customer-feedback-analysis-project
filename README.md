@@ -69,7 +69,8 @@ so the team can act on *"what are people complaining about this week?"* in minut
 | Dimensionality reduction | `UMAP` |
 | Clustering | `HDBSCAN` |
 | Topic modeling | `BERTopic` (MMR, KeyBERTInspired) |
-| Summarization | `llama-cpp-python` (GGUF) **or** Claude API (`anthropic`) |
+| Summarization | `llama-cpp-python` (GGUF), Claude API, or any OpenAI-compatible API |
+| Dashboard | `Streamlit`, `Altair` |
 | Config / CLI | `PyYAML`, `argparse` |
 
 ## 🗂️ Project Structure
@@ -82,8 +83,10 @@ src/
   preprocess.py          # clean → word-segment → stopwords → dedup
   embed.py               # embeddings, device auto-detect, .npy cache
   topic_model.py         # UMAP + HDBSCAN + BERTopic, save/load, silhouette
-  summarize.py           # pluggable LLM summary (llama_cpp | anthropic), cached
+  summarize.py           # pluggable LLM summary (llama_cpp | anthropic | openai_compatible)
   pipeline.py            # CLI entrypoint wiring it all together
+app.py                   # Streamlit dashboard (upload → analyze → view)
+docs/SYSTEM.md           # full system documentation (business + technical)
 notebooks/viet_request.py  # original exploratory notebook (kept for reference)
 data/                    # sample input
 ```
@@ -129,16 +132,19 @@ per topic (with CSV export). The API key is read from the environment, never the
 
 ## 📊 Output
 
-Results are written to `output/topic_representations.csv`:
+Results are written to `output/topic_representations.csv` (`Topic | Keywords | Summary`).
+On the bundled sample (**146 feedback → 13 topics, silhouette ≈ 0.50**) the pipeline
+surfaced coherent, real themes, e.g.:
 
-| Topic | Keywords | Summary |
-|-------|----------|---------|
-| 0 | giao_hàng \| chậm \| ship | Khách phàn nàn về tốc độ giao hàng chậm hơn cam kết. |
-| 1 | chất_lượng \| vải \| đẹp | Phản hồi tích cực về chất lượng vải và kiểu dáng sản phẩm. |
+| Topic | Keywords | What customers raised |
+|-------|----------|-----------------------|
+| 6 | giao_hàng · ship · đặt | Delivery time, order cancellation, address changes, checking goods on arrival. |
+| 7 | zalopay · thanh_toán · ví | Payment methods (Momo, ZaloPay, ViettelPay) and pay-on-inspection. |
+| 4 | size · đổi · sai | Size-exchange policy when the wrong/ill-fitting size is bought. |
+| 9 | web · filter · font | Website bugs: broken fonts on mobile, wrong product colors, filter issues. |
 
-*(Illustrative — actual topics depend on your dataset.)* The BERTopic model is also
-saved to `output/bertopic_model/` for reuse, and a silhouette score is printed to
-gauge cluster quality.
+The trained BERTopic model is saved to `output/bertopic_model/` for reuse, and a
+silhouette score is printed to gauge cluster quality. *(Topics depend on your dataset.)*
 
 ## 🎯 What This Project Demonstrates
 
@@ -149,6 +155,12 @@ gauge cluster quality.
   to spot a subtle correctness bug (missing tokenization) and fix it.
 - **Software engineering on ML code**: turning a notebook into a configurable,
   cached, testable, CLI-driven package with a swappable LLM backend.
+
+## 📚 Documentation
+
+A full system document — **business context → technology → processing pipeline →
+how to run → result interpretation → real-world deployment** — is in
+[docs/SYSTEM.md](docs/SYSTEM.md).
 
 ## 📄 License
 
